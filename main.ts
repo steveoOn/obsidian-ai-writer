@@ -7,10 +7,9 @@ import {
 	Plugin,
 	PluginSettingTab,
 	Setting,
-	TFile,
 } from "obsidian";
-import axios from "axios";
-
+import MyClass from "./src/classes/MyClass";
+import { encode, decode, isWithinTokenLimit } from "gpt-tokenizer";
 // Remember to rename these classes and interfaces!
 
 interface MyPluginSettings {
@@ -21,106 +20,10 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
 	mySetting: "default",
 };
 
-class MyClass {
-	app: App;
-
-	constructor() {
-		this.app = app;
-	}
-
-	async getCurrentFileContent(): Promise<string | null | undefined> {
-		try {
-			const activeFile: TFile | null = this.app.workspace.getActiveFile();
-			if (!activeFile) {
-				throw new Error("No active file");
-			} else if (activeFile instanceof TFile) {
-				return await this.app.vault.cachedRead(activeFile);
-			}
-		} catch (error) {
-			console.error("Error getting current file content:", error);
-			return null;
-		}
-	}
-
-	async sendPostRequest(prompt: string): Promise<string | null> {
-		try {
-			const response = await axios.post(
-				"https://api.bitewise.cc/v1/completions",
-				{
-					prompt: `\n\n### Instructions:\n${prompt}\n\n### Response:\n`,
-					stop: ["\n", "###"],
-					max_tokens: 800,
-				}
-			);
-
-			console.log(response.data);
-
-			// Extract the 'text' property from the first object in the array
-			const completionText = response.data.choices[0]?.text;
-
-			return completionText;
-		} catch (error) {
-			console.error("Error sending POST request:", error);
-			return null;
-		}
-	}
-}
-
-const myClassInstance = new MyClass(app);
-
-let spaceCounter = 0;
-
-async function sendCompletionRequest() {
-	const activeFile = await myClassInstance.getCurrentFileContent();
-
-	if (activeFile) {
-		console.log("sending POST request...");
-		const prompt = activeFile.replace(/(?:\r\n|\r|\n)/g, "\\n");
-		// Pass the content of the active file as a prompt
-		console.log("Prompt:", prompt);
-		const completionText = await myClassInstance.sendPostRequest(prompt);
-
-		if (completionText) {
-			// Write 'completionText' to the Obsidian editor
-			console.log("Completion text:", completionText);
-			const activeView = app.workspace.getActiveViewOfType(MarkdownView);
-			if (activeView) {
-				const editor = activeView.editor;
-				editor.replaceSelection(completionText);
-			} else {
-				console.error("Failed to get the active view.");
-			}
-		} else {
-			console.error(
-				"Failed to parse the completion text from the API response."
-			);
-		}
-	} else {
-		console.error(
-			"Cannot send POST request: The content of the current file is empty or not available."
-		);
-	}
-}
-
-document.addEventListener("keydown", async (event) => {
-	if (event.code === "Space") {
-		spaceCounter++;
-
-		if (spaceCounter === 3) {
-			// Reset the counter
-			spaceCounter = 0;
-
-			// Send the completion request
-			await sendCompletionRequest();
-		}
-	} else {
-		// Reset the counter if a non-space key was pressed
-		spaceCounter = 0;
-	}
-});
-
 export default class MyPlugin extends Plugin {
 	settings: MyPluginSettings;
+	myClassInstance: MyClass;
+	spaceCounter: number;
 
 	async onload() {
 		console.log("loading plugin");
@@ -193,6 +96,78 @@ export default class MyPlugin extends Plugin {
 		this.registerInterval(
 			window.setInterval(() => console.log("setInterval"), 5 * 60 * 1000)
 		);
+
+		this.myClassInstance = new MyClass(this.app);
+		this.spaceCounter = 0;
+
+		document.addEventListener("keydown", async (event) => {
+			if (event.code === "Space") {
+				this.spaceCounter++;
+
+				if (this.spaceCounter === 3) {
+					// Reset the counter
+					this.spaceCounter = 0;
+
+					// Send the completion request
+					await this.sendCompletionRequest();
+				}
+			} else {
+				// Reset the counter if a non-space key was pressed
+				this.spaceCounter = 0;
+			}
+		});
+	}
+
+	async sendCompletionRequest() {
+		const activeFile = await this.myClassInstance.getCurrentFileContent();
+
+		if (activeFile) {
+			console.log("sending POST request...");
+			const tokenLimit = 800;
+			let prompt = activeFile.replace(/(?:\r\n|\r|\n)/g, "\\n");
+
+			const isWithinTokenLimitResult = isWithinTokenLimit(
+				activeFile,
+				tokenLimit
+			);
+			console.log("isWithinTokenLimitResult:", isWithinTokenLimitResult);
+			// if isWithinTokenLimitResult is false, then we need to cut the prompt to fit within the token limit
+			if (isWithinTokenLimitResult === false) {
+				const promptTokens = encode(activeFile);
+				const promptTokensWithinLimit = promptTokens.slice(
+					-promptTokens.length + tokenLimit
+				);
+				const promptWithinLimit = decode(promptTokensWithinLimit);
+				// convert promptWithinLimit format that can be parsed by the API
+				prompt = promptWithinLimit.replace(/(?:\r\n|\r|\n)/g, "\\n");
+			}
+			// Pass the content of the active file as a prompt
+			console.log("Prompt:", prompt);
+			const completionText = await this.myClassInstance.sendPostRequest(
+				prompt
+			);
+
+			if (completionText) {
+				// Write 'completionText' to the Obsidian editor
+				console.log("Completion text:", completionText);
+				const activeView =
+					this.app.workspace.getActiveViewOfType(MarkdownView);
+				if (activeView) {
+					const editor = activeView.editor;
+					editor.replaceSelection(completionText);
+				} else {
+					console.error("Failed to get the active view.");
+				}
+			} else {
+				console.error(
+					"Failed to parse the completion text from the API response."
+				);
+			}
+		} else {
+			console.error(
+				"Cannot send POST request: The content of the current file is empty or not available."
+			);
+		}
 	}
 
 	onunload() {
