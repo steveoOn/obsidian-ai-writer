@@ -23,7 +23,7 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
 export default class MyPlugin extends Plugin {
 	settings: MyPluginSettings;
 	myClassInstance: MyClass;
-	spaceCounter: number;
+	shiftCounter: number;
 
 	async onload() {
 		console.log("loading plugin");
@@ -98,42 +98,44 @@ export default class MyPlugin extends Plugin {
 		);
 
 		this.myClassInstance = new MyClass(this.app);
-		this.spaceCounter = 0;
+		this.shiftCounter = 0;
 
 		document.addEventListener("keydown", async (event) => {
-			if (event.code === "Space") {
-				this.spaceCounter++;
+			if (event.code === "ShiftLeft") {
+				this.shiftCounter++;
 
-				if (this.spaceCounter === 3) {
+				if (this.shiftCounter === 3) {
 					// Reset the counter
-					this.spaceCounter = 0;
+					this.shiftCounter = 0;
 
 					// Send the completion request
 					await this.sendCompletionRequest();
 				}
 			} else {
 				// Reset the counter if a non-space key was pressed
-				this.spaceCounter = 0;
+				this.shiftCounter = 0;
 			}
 		});
 	}
 
 	async sendCompletionRequest() {
-		const activeFile = await this.myClassInstance.getCurrentFileContent();
+		// const activeFile = await this.myClassInstance.getCurrentFileContent();
+		const textBeforeCursor =
+			await this.myClassInstance.getTextBeforeCursor();
 
-		if (activeFile) {
+		if (textBeforeCursor) {
 			console.log("sending POST request...");
-			const tokenLimit = 800;
-			let prompt = activeFile.replace(/(?:\r\n|\r|\n)/g, "\\n");
+			const tokenLimit = 4096;
+			let prompt = textBeforeCursor.replace(/(?:\r\n|\r|\n)/g, "\\n");
 
 			const isWithinTokenLimitResult = isWithinTokenLimit(
-				activeFile,
+				textBeforeCursor,
 				tokenLimit
 			);
 			console.log("isWithinTokenLimitResult:", isWithinTokenLimitResult);
 			// if isWithinTokenLimitResult is false, then we need to cut the prompt to fit within the token limit
 			if (isWithinTokenLimitResult === false) {
-				const promptTokens = encode(activeFile);
+				const promptTokens = encode(textBeforeCursor);
 				const promptTokensWithinLimit = promptTokens.slice(
 					-promptTokens.length + tokenLimit
 				);
