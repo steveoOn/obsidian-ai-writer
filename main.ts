@@ -119,57 +119,64 @@ export default class MyPlugin extends Plugin {
 	}
 
 	async sendCompletionRequest() {
-		// const activeFile = await this.myClassInstance.getCurrentFileContent();
 		const textBeforeCursor =
 			await this.myClassInstance.getTextBeforeCursor();
 
-		if (textBeforeCursor) {
-			console.log("sending POST request...");
-			const tokenLimit = 4096;
-			let prompt = textBeforeCursor.replace(/(?:\r\n|\r|\n)/g, "\\n");
-
-			const activeView =
-				this.app.workspace.getActiveViewOfType(MarkdownView);
-
-			const isWithinTokenLimitResult = isWithinTokenLimit(
-				textBeforeCursor,
-				tokenLimit
+		if (!textBeforeCursor) {
+			console.error(
+				"Cannot send POST request: The content of the current file is empty or not available."
 			);
-			console.log("isWithinTokenLimitResult:", isWithinTokenLimitResult);
-			// if isWithinTokenLimitResult is false, then we need to cut the prompt to fit within the token limit
-			if (isWithinTokenLimitResult === false) {
-				const promptTokens = encode(textBeforeCursor);
-				const promptTokensWithinLimit = promptTokens.slice(
-					-promptTokens.length + tokenLimit
-				);
-				const promptWithinLimit = decode(promptTokensWithinLimit);
-				// convert promptWithinLimit format that can be parsed by the API
-				prompt = promptWithinLimit.replace(/(?:\r\n|\r|\n)/g, "\\n");
+			return;
+		}
+
+		console.log("sending POST request...");
+		const tokenLimit = 4096;
+		let prompt = textBeforeCursor.replace(/(?:\r\n|\r|\n)/g, "\\n");
+
+		const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+		const isWithinTokenLimitResult = isWithinTokenLimit(
+			textBeforeCursor,
+			tokenLimit
+		);
+		console.log("isWithinTokenLimitResult:", isWithinTokenLimitResult);
+
+		if (isWithinTokenLimitResult === false) {
+			const promptTokens = encode(textBeforeCursor);
+			const promptTokensWithinLimit = promptTokens.slice(-tokenLimit);
+			prompt = decode(promptTokensWithinLimit).replace(
+				/(?:\r\n|\r|\n)/g,
+				"\\n"
+			);
+		}
+
+		console.log("Prompt:", prompt);
+		let completionText = "thinking...";
+
+		if (activeView) {
+			const editor = activeView.editor;
+			editor.replaceSelection(completionText);
+
+			const response = await this.myClassInstance.sendPostRequest(prompt);
+
+			if (response !== null) {
+				completionText = response;
+			} else {
+				console.error("Failed to get completion text from API.");
 			}
-			// Pass the content of the active file as a prompt
-			console.log("Prompt:", prompt);
-			let completionText = "";
+		}
+
+		if (completionText) {
+			console.log("Completion text:", completionText);
 
 			if (activeView) {
 				const editor = activeView.editor;
-				completionText = "thinking...";
 				editor.replaceSelection(completionText);
-				const response = await this.myClassInstance.sendPostRequest(
-					prompt
-				);
-
-				if (response !== null) {
-					completionText = response;
-					editor.replaceSelection(completionText);
-				} else {
-					console.error("Failed to get completion text from API.");
-				}
 			} else {
 				console.error("Failed to get the active view.");
 			}
 		} else {
 			console.error(
-				"Cannot send POST request: The content of the current file is empty or not available."
+				"Failed to parse the completion text from the API response."
 			);
 		}
 	}
