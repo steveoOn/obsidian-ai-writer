@@ -45,7 +45,7 @@ export default class MyClass {
 	async sendPostRequest(prompt: string): Promise<string | null> {
 		try {
 			const response = await axios.post(
-				"https://api.bitewise.cc/v1/completions",
+				"https://api13b.bitewise.cc/v1/completions",
 				{
 					prompt: `\n\n### Instructions:\nBased on the context provided above, continue writing the following passage. Previous context: ${prompt}\n\n### Response (limited to 30 tokens):\n`,
 					stop: ["###"],
