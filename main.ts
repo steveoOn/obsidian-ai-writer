@@ -128,6 +128,9 @@ export default class MyPlugin extends Plugin {
 			const tokenLimit = 4096;
 			let prompt = textBeforeCursor.replace(/(?:\r\n|\r|\n)/g, "\\n");
 
+			const activeView =
+				this.app.workspace.getActiveViewOfType(MarkdownView);
+
 			const isWithinTokenLimitResult = isWithinTokenLimit(
 				textBeforeCursor,
 				tokenLimit
@@ -145,25 +148,24 @@ export default class MyPlugin extends Plugin {
 			}
 			// Pass the content of the active file as a prompt
 			console.log("Prompt:", prompt);
-			const completionText = await this.myClassInstance.sendPostRequest(
-				prompt
-			);
+			let completionText = "";
 
-			if (completionText) {
-				// Write 'completionText' to the Obsidian editor
-				console.log("Completion text:", completionText);
-				const activeView =
-					this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (activeView) {
-					const editor = activeView.editor;
+			if (activeView) {
+				const editor = activeView.editor;
+				completionText = "thinking...";
+				editor.replaceSelection(completionText);
+				const response = await this.myClassInstance.sendPostRequest(
+					prompt
+				);
+
+				if (response !== null) {
+					completionText = response;
 					editor.replaceSelection(completionText);
 				} else {
-					console.error("Failed to get the active view.");
+					console.error("Failed to get completion text from API.");
 				}
 			} else {
-				console.error(
-					"Failed to parse the completion text from the API response."
-				);
+				console.error("Failed to get the active view.");
 			}
 		} else {
 			console.error(
