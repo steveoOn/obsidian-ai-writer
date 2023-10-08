@@ -130,7 +130,7 @@ export default class MyPlugin extends Plugin {
 		}
 
 		console.log("sending POST request...");
-		const tokenLimit = 8192;
+		const tokenLimit = 1800;
 		let prompt = textBeforeCursor.replace(/(?:\r\n|\r|\n)/g, "\\n");
 
 		const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);

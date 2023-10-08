@@ -47,7 +47,7 @@ export default class MyClass {
 			const response = await axios.post(
 				"https://api13b.bitewise.cc/v1/completions",
 				{
-					prompt: `\n\n### Instructions:\nBased on the context provided above, continue writing the following passage. Previous context: ${prompt}\n\n### Response (limited to 30 tokens):\n`,
+					prompt: `\n\n### Instructions:\nBased on the context provided above, continue writing the following passage. Previous context: ${prompt}\n\n### Response (limited to 30 tokens,reply with language in context):\n`,
 					stop: ["###"],
 					max_tokens: 500,
 				}
